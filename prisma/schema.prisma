@@ -1,0 +1,437 @@
+// JobPilot Prisma Schema (PostgreSQL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------- Users & Auth -------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  name         String?
+  image        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile     Profile?
+  experiences Experience[]
+  skills      Skill[]
+  education   Education[]
+  certifications Certification[]
+  projects    Project[]
+  resumes     Resume[]
+  applications Application[]
+  sessions    Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ------------------------- Master Profile -------------------------
+
+model Profile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  fullName           String
+  email              String
+  phone              String?
+  location           String?
+  linkedin           String?
+  github             String?
+  portfolio          String?
+  website            String?
+
+  // Professional info
+  currentJobTitle    String?
+  yearsOfExperience  Int?
+  preferredTitles    String[]
+  preferredTech      String[]
+  preferredIndustries String[]
+  preferredLocations String[]
+  languages          String[]
+  workPreference     WorkPreference? // REMOTE / HYBRID / ONSITE
+  expectedSalaryMin  Int?
+  expectedSalaryMax  Int?
+  availability       String?
+  bio                String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobMatches JobMatch[]
+
+  @@index([userId])
+}
+
+model Experience {
+  id             String   @id @default(cuid())
+  userId         String
+  company        String
+  title          String
+  location       String?
+  employmentType String?
+  startDate      String
+  endDate        String?
+  description    String?
+  responsibilities String[]
+  achievements   String[]
+  technologies   String[]
+  isActive       Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Skill {
+  id       String       @id @default(cuid())
+  userId   String
+  name     String
+  category SkillCategory @default(FRONTEND)
+  level    Int? // 1-5
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model Education {
+  id          String   @id @default(cuid())
+  userId      String
+  degree      String
+  institution String
+  startDate   String
+  endDate     String?
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Certification {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  issuer        String
+  date          String?
+  credentialUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Project {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  description  String?
+  technologies String[]
+  url          String?
+  githubUrl    String?
+  imageUrl     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ------------------------- Jobs -------------------------
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  domain      String?
+  careersUrl  String?
+  linkedinUrl String?
+  website     String?
+  description String?
+  location    String?
+  verified    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobs Job[]
+
+  @@unique([name])
+}
+
+model JobSource {
+  id           String        @id @default(cuid())
+  name         String
+  type         JobSourceType
+  active       Boolean       @default(true)
+  logoUrl      String?
+  homePageUrl  String?
+  feedUrl      String?
+
+  jobs Job[]
+
+  @@unique([name])
+}
+
+model Job {
+  id               String   @id @default(cuid())
+  sourceId         String?
+  companyId        String?
+  title            String
+  description      String?
+  location         String?
+  remote           Boolean  @default(false)
+  salaryMin        Int?
+  salaryMax        Int?
+  salaryCurrency   String?
+  postedAt         DateTime @default(now())
+  sourceUrl        String?
+  status           JobStatus @default(SEARCHED)
+  matchScore       Int?
+  credibilityScore Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company        Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  source         JobSource?      @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  requirements   JobRequirement?
+  matches        JobMatch[]
+  applications   Application[]
+
+  @@index([title])
+  @@index([postedAt])
+  @@index([status])
+  @@index([companyId])
+}
+
+model JobRequirement {
+  id            String  @id @default(cuid())
+  jobId         String  @unique
+  requiredTech  String[]
+  preferredTech String[]
+  minimumYears  Int?
+  industry      String?
+  location      String?
+  remote        Boolean @default(false)
+  educationLevel String?
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+// ------------------------- Matching -------------------------
+
+model JobMatch {
+  id             String   @id @default(cuid())
+  jobId          String
+  profileId      String
+  matchScore     Int
+  credibilityScore Int?
+  missingRequirements String[]
+  missing        String[]
+  reasons        String[]
+  seniorityAssessment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job     Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, profileId])
+  @@index([profileId])
+  @@index([matchScore])
+}
+
+// ------------------------- Resumes -------------------------
+
+model Resume {
+  id          String     @id @default(cuid())
+  userId      String
+  name        String
+  template    String     @default("standard")
+  content     Json
+  pdfUrl      String?
+  isMaster    Boolean    @default(false)
+  isJobSpecific Boolean  @default(false)
+  jobId       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  versions       ResumeVersion[]
+  applications   Application[]
+
+  @@index([userId])
+  @@index([jobId])
+}
+
+model ResumeVersion {
+  id        String   @id @default(cuid())
+  resumeId  String
+  version   Int
+  content   Json
+  createdAt DateTime @default(now())
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@unique([resumeId, version])
+}
+
+// ------------------------- Applications -------------------------
+
+model CoverLetter {
+  id          String   @id @default(cuid())
+  userId      String
+  jobId       String?
+  content     String
+  applicationId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+}
+
+model Application {
+  id          String   @id @default(cuid())
+  userId      String
+  jobId       String
+  profileId   String
+  resumeId    String?
+  status      ApplicationStatus @default(PREPARING)
+  appliedAt   DateTime?
+  viewedAt    DateTime?
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resume    Resume?   @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  answers   ApplicationAnswer[]
+  events    ApplicationEvent[]
+  coverLetter CoverLetter?
+
+  @@unique([userId, jobId])
+  @@index([userId])
+  @@index([status])
+}
+
+model ApplicationAnswer {
+  id            String  @id @default(cuid())
+  applicationId String
+  question      String
+  answer        String
+  isGenerated   Boolean @default(false)
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model ApplicationEvent {
+  id            String    @id @default(cuid())
+  applicationId String
+  eventType     ApplicationEventType
+  details       Json?
+  createdAt     DateTime  @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+// ------------------------- Enums -------------------------
+
+enum SkillCategory {
+  FRONTEND
+  BACKEND
+  DATABASE
+  DEVOPS
+  TOOLS
+  OTHER
+}
+
+enum WorkPreference {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+enum JobStatus {
+  UNSEARCHED
+  SEARCHED
+  MATCHED
+  APPLIED
+  SUBMITTED
+  REJECTED
+  OFFERED
+  WITHDRAWN
+  CANCELLED
+}
+
+enum JobSourceType {
+  GOOGLE_JOBS
+  RSS_FEED
+  API_SOURCE
+  DIRECT_SCRAPE
+}
+
+enum ApplicationStatus {
+  SAVED
+  PREPARING
+  READY_TO_APPLY
+  APPLIED
+  VIEWED
+  INTERVIEW
+  REJECTED
+  OFFER
+  WITHDRAWN
+}
+
+enum ApplicationEventType {
+  STEP_STARTED
+  FIELD_FILLED
+  FIELD_REVIEWED
+  SUBMIT_ATTEMPTED
+  HUMAN_TAKES_OVERRIDE
+  SUBMITTED_SUCCESSFULLY
+  BLOCKED
+  CANCELLED
+}
